@@ -73,6 +73,20 @@ void operf_process_info::process_new_mapping(struct operf_mmap * mapping)
 			app_basename = basename;
 			num_app_chars_matched = num_matched_chars;
 			cverb << vmisc << "Best appname match is " << _appname << endl;
+		} else {
+			char buf_link[BUFSIZ];
+			char buf_target[BUFSIZ];
+			snprintf(buf_link, BUFSIZ, "/proc/%d/exe", pid);
+			readlink(buf_link, buf_target, sizeof(buf_target)-1);
+			if(strcmp(mapping->filename, buf_target)==0){
+				cverb << vmisc
+					<< "Process might be changed it's name from '"
+					<< _appname << "' to '" << mapping->filename << "'" << endl;
+				appname_is_fullname = YES_FULLNAME;
+				_appname = mapping->filename;
+				app_basename = op_basename(_appname);
+				num_app_chars_matched = (int)app_basename.length();
+			}
 		}
 	}
 	mmappings[mapping->start_addr] = mapping;
