@@ -67,6 +67,7 @@
 #include "op_config.h"
 #include "jitdump.h"
 
+
 // Declare BFD-related global variables.
 static char * _bfd_target_name;
 static int _bfd_arch;
@@ -235,6 +236,10 @@ int op_close_agent(op_agent_t hdl)
 }
 
 
+#ifdef NDK_BUILD
+#define fwrite_unlocked fwrite
+#define fflush_unlocked fflush
+#endif
 int op_write_native_code(op_agent_t hdl, char const * symbol_name,
 	uint64_t vma, void const * code, unsigned int const size)
 {
