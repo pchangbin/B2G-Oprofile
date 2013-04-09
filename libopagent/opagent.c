@@ -118,7 +118,11 @@ static int define_bfd_vars(void)
 #define OP_MAJOR_VERSION 1
 #define OP_MINOR_VERSION 0
 
+#ifdef NDK_BUILD
+#define TMP_OPROFILE_DIR "/data/b2g/.oprofile"
+#else
 #define TMP_OPROFILE_DIR "/tmp/.oprofile"
+#endif
 #define JITDUMP_DIR TMP_OPROFILE_DIR "/jitdump"
 
 #define MSG_MAXLEN 20
