@@ -748,7 +748,11 @@ static void cleanup(void)
 	events.clear();
 	verbose_string.clear();
 	if (operf_options::post_conversion) {
+#ifdef NDK_BUILD
+		string cmd = "rm " + outputfile;
+#else
 		string cmd = "rm -f " + outputfile;
+#endif
 		if (system(cmd.c_str()) != 0)
 			cerr << "Unable to remove " << outputfile << endl;
 	}

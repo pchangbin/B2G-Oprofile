@@ -199,7 +199,11 @@ int copy_dumpfile(char const * dumpfile, char * tmp_dumpfile)
 {
 	int rc = OP_JIT_CONV_OK;
 
+#ifdef NDK_BUILD
+	sprintf(sys_cmd_buffer, "/system/bin/cat %s > %s", dumpfile, tmp_dumpfile);
+#else
 	sprintf(sys_cmd_buffer, "/bin/cp -p %s %s", dumpfile, tmp_dumpfile);
+#endif
 
 	if (system(sys_cmd_buffer) != 0) {
 		printf("opjitconv: Calling system() to copy files failed.\n");
@@ -226,7 +230,11 @@ int copy_elffile(char * elf_file, char * tmp_elffile)
 	int rc = OP_JIT_CONV_OK;
 	int fd;
 
+#ifdef NDK_BUILD
+	sprintf(sys_cmd_buffer, "/system/bin/cat %s > %s", tmp_elffile, elf_file);
+#else
 	sprintf(sys_cmd_buffer, "/bin/cp -p %s %s", tmp_elffile, elf_file);
+#endif
 	if (system(sys_cmd_buffer) != 0) {
 		printf("opjitconv: Calling system() to copy files failed.\n");
 		rc = OP_JIT_CONV_FAIL;
@@ -545,7 +553,11 @@ static int op_process_jit_dumpfiles(char const * session_dir,
 	int rc = OP_JIT_CONV_OK;
 	char jitdumpfile[PATH_MAX + 1];
 	char oprofile_tmp_template[PATH_MAX + 1];
+#ifdef NDK_BUILD
+	char const * jitdump_dir = "/data/b2g/.oprofile/jitdump/";
+#else
 	char const * jitdump_dir = "/tmp/.oprofile/jitdump/";
+#endif
 
 	LIST_HEAD(jd_fnames);
 	char const * anon_dir_filter = "*/{dep}/{anon:anon}/[0-9]*.*";
@@ -559,12 +571,20 @@ static int op_process_jit_dumpfiles(char const * session_dir,
 	if (non_root)
 		sprintf(oprofile_tmp_template, "%s/tmp", session_dir);
 	else
+#ifdef NDK_BUILD
+		strcpy(oprofile_tmp_template, "/data/b2g/oprofile.XXXXXX");
+#else
 		strcpy(oprofile_tmp_template, "/tmp/oprofile.XXXXXX");
+#endif
 
 	/* Create a temporary working directory used for the conversion step.
 	 */
 	if (non_root) {
+#ifdef NDK_BUILD
+		sprintf(sys_cmd_buffer, "/system/bin/rm -r %s", oprofile_tmp_template);
+#else
 		sprintf(sys_cmd_buffer, "/bin/rm -rf %s", oprofile_tmp_template);
+#endif
 		if (system(sys_cmd_buffer) != 0) {
 			printf("opjitconv: Removing temporary working directory %s failed.\n",
 			       oprofile_tmp_template);
@@ -617,7 +637,11 @@ static int op_process_jit_dumpfiles(char const * session_dir,
 	if (non_root) {
 		pw_oprofile = NULL;
 	} else {
+#ifdef NDK_BUILD
+		pw_oprofile = getpwnam("root");
+#else
 		pw_oprofile = getpwnam("oprofile");
+#endif
 		if (pw_oprofile == NULL) {
 			printf("opjitconv: User information for special user oprofile cannot be found.\n");
 			rc = OP_JIT_CONV_FAIL;
@@ -679,7 +703,11 @@ rm_tmp:
 	/* Delete temporary working directory with all its files
 	 * (i.e. dump and ELF file).
 	 */
+#ifdef NDK_BUILD
+	sprintf(sys_cmd_buffer, "/system/bin/rm -r '%s'", tmp_conv_dir);
+#else
 	sprintf(sys_cmd_buffer, "/bin/rm -rf '%s'", tmp_conv_dir);
+#endif
 	if (system(sys_cmd_buffer) != 0) {
 		printf("opjitconv: Removing temporary working directory failed.\n");
 		rc = OP_JIT_CONV_TMPDIR_NOT_REMOVED;
@@ -692,7 +720,11 @@ out:
 static void _cleanup_jitdumps(void)
 {
 	struct list_head * pos1, *pos2;
+#ifdef NDK_BUILD
+	char const * jitdump_dir = "/data/b2g/.oprofile/jitdump/";
+#else
 	char const * jitdump_dir = "/tmp/.oprofile/jitdump/";
+#endif
 	size_t dir_len = strlen(jitdump_dir);
 	char dmpfile_pathname[dir_len + 20];
 	char proc_fd_dir[PATH_MAX];
