@@ -1,0 +1,5 @@
+opimport
+Makefile
+Makefile.in
+.deps
+.libs
