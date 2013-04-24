@@ -18,11 +18,15 @@ $ popd
 ```
 ## Target version
  * Assume that NDK standalone toolchain is installed at $src_root/build/ndk
- * More detailed information for popt and binutils are found [here](https://docs.google.com/document/d/15RTM2khWisEeecW50zZpyNLPDnQQA7ODl7BkPYFuvh8/pub#h.fegkfqzhz005)
+ * Target version needs popt library and binutils other than NDK included.
 ### popt library
  * Modified to build with NDK standalone toolchain
+ * More detailed information for popt and binutils are found [here](https://docs.google.com/document/d/15RTM2khWisEeecW50zZpyNLPDnQQA7ODl7BkPYFuvh8/pub#h.fegkfqzhz005)
+
 ### binutils
  *  Modified to build with NDK standalone toolchain
+ * More detailed information for popt and binutils are found [here](https://docs.google.com/document/d/15RTM2khWisEeecW50zZpyNLPDnQQA7ODl7BkPYFuvh8/pub#h.fegkfqzhz005)
+
 ### Oprofile for target
 ```shell
 $ mkdir -p $PWD/build/target && pushd $PWD/build/target
