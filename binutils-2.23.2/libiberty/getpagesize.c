@@ -60,11 +60,13 @@ BUGS
 # endif /* PAGESIZE */
 #endif /* GNU_OUR_PAGESIZE */
 
+#if 0 // defined in unistd.h of NDK
 int
 getpagesize (void)
 {
   return (GNU_OUR_PAGESIZE);
 }
+#endif // NDK_BUILD
 
 #else /* VMS */
 
