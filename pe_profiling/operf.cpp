@@ -31,7 +31,9 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <sys/wait.h>
+#ifndef NDK_BUILD
 #include <ftw.h>
+#endif
 #include <getopt.h>
 #include <iostream>
 #include "operf_utils.h"
@@ -837,6 +839,29 @@ static void _do_jitdump_convert()
 
 }
 
+#ifdef NDK_BUILD
+typedef vector<string> dir_entry_cont_t;
+dir_entry_cont_t get_dir_entries(string path)
+{
+    struct dirent *dp=NULL;
+    dir_entry_cont_t path_list;
+    DIR *dir=opendir(path.c_str());
+    if(dir) {
+        while((dp=readdir(dir)) != NULL){
+            string dir_entry(dp->d_name);
+            if(dir_entry=="." || dir_entry=="..") continue;
+            dir_entry = path + "/" + dir_entry;
+            path_list.push_back(dir_entry);
+            if(dp->d_type == DT_DIR){
+                dir_entry_cont_t sub_list = get_dir_entries(dir_entry);
+                path_list.insert(path_list.end(), sub_list.begin(), sub_list.end());
+            }
+        }
+        closedir(dir);
+    }
+    return path_list;
+}
+#else
 static int __delete_old_previous_sample_data(const char *fpath,
                                 const struct stat *sb  __attribute__((unused)),
                                 int tflag  __attribute__((unused)),
@@ -849,6 +874,7 @@ static int __delete_old_previous_sample_data(const char *fpath,
 		return FTW_CONTINUE;
 	}
 }
+#endif
 
 /* Read perf_events sample data written by the operf-record process through
  * the sample_data_pipe or file (dependent on 'lazy-conversion' option)
@@ -882,6 +908,18 @@ static void convert_sample_data(void)
 		return;
 
 	if (!operf_options::append) {
+#ifdef NDK_BUILD
+        dir_entry_cont_t dir_entries = get_dir_entries(previous_sampledir);
+        for(dir_entry_cont_t::reverse_iterator i=dir_entries.rbegin();i!=dir_entries.rend();++i){
+            if (remove(i->c_str())) {
+                perror("sample data removal error");
+                cerr << "Unable to remove old sample data at " << previous_sampledir << "." << endl;
+                if (errno) cerr << strerror(errno) << endl;
+                rc = EXIT_FAILURE;
+                goto out;
+            }
+        }
+#else
                 int flags = FTW_DEPTH | FTW_ACTIONRETVAL;
 		errno = 0;
 		if (nftw(previous_sampledir.c_str(), __delete_old_previous_sample_data, 32, flags) !=0 &&
@@ -892,6 +930,7 @@ static void convert_sample_data(void)
 			rc = EXIT_FAILURE;
 			goto out;
 		}
+#endif
 		if (rename(current_sampledir.c_str(), previous_sampledir.c_str()) < 0) {
 			if (errno && (errno != ENOENT)) {
 				cerr << "Unable to move old profile data to " << previous_sampledir << endl;
