@@ -12683,12 +12683,12 @@ print_gnu_note (Elf_Internal_Note *pnote)
 
     case NT_GNU_ABI_TAG:
       {
-	unsigned long os, major, minor, subminor;
+	unsigned long os, _major, _minor, subminor;
 	const char *osname;
 
 	os = byte_get ((unsigned char *) pnote->descdata, 4);
-	major = byte_get ((unsigned char *) pnote->descdata + 4, 4);
-	minor = byte_get ((unsigned char *) pnote->descdata + 8, 4);
+	_major = byte_get ((unsigned char *) pnote->descdata + 4, 4);
+	_minor = byte_get ((unsigned char *) pnote->descdata + 8, 4);
 	subminor = byte_get ((unsigned char *) pnote->descdata + 12, 4);
 
 	switch (os)
@@ -12714,7 +12714,7 @@ print_gnu_note (Elf_Internal_Note *pnote)
 	  }
 
 	printf (_("    OS: %s, ABI: %ld.%ld.%ld\n"), osname,
-		major, minor, subminor);
+		_major, _minor, subminor);
       }
       break;
     }
