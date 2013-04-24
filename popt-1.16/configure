@@ -20,7 +20,6 @@ via 'NDK' environment variable.
 EOF
 	exit 1
 fi
-prefix=$NDK/sysroot/usr
 
 host_alias=arm-eabi
 
