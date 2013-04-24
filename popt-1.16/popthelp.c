@@ -21,6 +21,7 @@
 /*@access mbstate_t @*/
 #endif
 #include "poptint.h"
+#include <termio.h>
 
 /*@access poptContext@*/
 
