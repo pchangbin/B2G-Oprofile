@@ -12,6 +12,32 @@
 ## M4sh Initialization. ##
 ## -------------------- ##
 
+if test "x$NDK" = "x" || ! test -d "$NDK" || ! test -d "$NDK/sysroot/usr" ;then
+	cat <<EOF >&2
+This popt library is dedicated for NDK toolchain.
+Make sure NDK toolchanin is installed and referenced it
+via 'NDK' environment variable.
+EOF
+	exit 1
+fi
+
+host_alias=arm-linux-androideabi
+target_alias=arm-eabi
+
+CC=arm-linux-androideabi-gcc
+CXX=arm-linux-androideabi-g++
+AR=arm-linux-androideabi-ar
+AS=arm-linux-androideabi-as
+LD=arm-linux-androideabi-ld
+NM=arm-linux-androideabi-nm
+RANLIB=arm-linux-androideabi-ranlib
+STRIP=arm-linux-androideabi-strip
+OBJCOPY=arm-linux-androideabi-objcopy
+OBJDUMP=arm-linux-androideabi-objdump
+READELF=arm-linux-androideabi-readelf
+STRIP_FOR_TARGET=$STRIP
+STRIPPROG=$STRIP
+
 # Be more Bourne compatible
 DUALCASE=1; export DUALCASE # for MKS sh
 if test -n "${ZSH_VERSION+set}" && (emulate sh) >/dev/null 2>&1; then :
