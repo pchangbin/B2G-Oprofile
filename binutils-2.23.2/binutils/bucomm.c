@@ -529,6 +529,7 @@ make_tempdir (char *filename)
   char *tmpname = template_in_dir (filename);
 
 #ifdef HAVE_MKDTEMP
+  char *mkdtemp(char *template);
   return mkdtemp (tmpname);
 #else
   tmpname = mktemp (tmpname);
