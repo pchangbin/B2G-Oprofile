@@ -11,7 +11,11 @@
 #define _GNU_SOURCE
 
 #include <stdlib.h>
+#ifdef NDK_BUILD
+#include <fcntl.h>
+#else
 #include <sys/fcntl.h>
+#endif
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>

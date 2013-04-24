@@ -39,7 +39,11 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <sys/time.h>
+#ifdef NDK_BUILD
+#include <sys/wait.h>
+#else
 #include <wait.h>
+#endif
 #include <string.h>
 
 size_t kernel_pointer_size;

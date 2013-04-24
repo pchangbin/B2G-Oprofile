@@ -25,6 +25,9 @@
 	struct perf_event_attr attr;
 	pid_t pid ;
 #endif
+#ifdef NDK_BUILD
+#include <sys/syscall.h>
+#endif
 
 static void usage(void)
 {

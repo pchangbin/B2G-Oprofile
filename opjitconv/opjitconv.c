@@ -32,7 +32,9 @@
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <unistd.h>
+#ifndef NDK_BUILD
 #include <wait.h>
+#endif
 
 /*
  * list head.  The linked list is used during parsing (parse_all) to
@@ -381,8 +383,8 @@ chk_proc_id:
 		 * modified since the ELF file's mod time, we don't need to
 		 * do ELF creation again.
 		 */
-		if (!(file_stat.st_ctime < dumpfile_modtime ||
-		    file_stat.st_mtime < dumpfile_modtime)) {
+		if (!((time_t)file_stat.st_ctime < dumpfile_modtime ||
+		    (time_t)file_stat.st_mtime < dumpfile_modtime)) {
 			rc = OP_JIT_CONV_ALREADY_DONE;
 			goto free_res3; 
 		}
@@ -572,6 +574,9 @@ static int op_process_jit_dumpfiles(char const * session_dir,
 				tmp_conv_dir = oprofile_tmp_template;
 		}
 	} else {
+#ifdef NDK_BUILD
+		extern char *mkdtemp(char *template);
+#endif
 		tmp_conv_dir = mkdtemp(oprofile_tmp_template);
 	}
 

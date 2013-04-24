@@ -22,7 +22,11 @@
 
 #include <unistd.h>
 #include <errno.h>
+#ifdef NDK_BUILD
+#include <linux/elf.h>
+#else
 #include <elf.h>
+#endif
 #include <cstdlib>
 #include <cstring>
 #include <cassert>
