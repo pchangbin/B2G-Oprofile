@@ -24,6 +24,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <assert.h>
 #include <pwd.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -145,6 +146,8 @@ static int mmap_jitdump(char const * dumpfile,
 		rc = OP_JIT_CONV_FAIL;
 	}
 out:
+	if (dumpfd != -1)
+		close(dumpfd);
 	return rc;
 }
 
@@ -376,6 +379,7 @@ chk_proc_id:
 		if (jofd < 0)
 			goto create_elf;
 		rc = fstat(jofd, &file_stat);
+		close(jofd);
 		if (rc < 0) {
 			perror("opjitconv:fstat on .jo file");
 			rc = OP_JIT_CONV_FAIL;
@@ -535,8 +539,10 @@ static void _add_jitdumps_to_deletion_list(void * all_jitdumps, char const * jit
 		if (fstat(fd, &mystat) < 0) {
 			// Non-fatal error, so just display debug message and continue
 			verbprintf(debug, "opjitconv: cannot fstat jitdump file");
+			close(fd);
 			continue;
 		}
+		close(fd);
 		if (geteuid() == mystat.st_uid) {
 			struct jitdump_deletion_candidate * jdc =
 					xmalloc(sizeof(struct jitdump_deletion_candidate));
@@ -769,7 +775,9 @@ static void _cleanup_jitdumps(void)
 				if (dirent->d_type == DT_LNK) {
 					char buf[1024];
 					char fname[1024];
+					memset(buf, '\0', 1024);
 					memset(fname, '\0', 1024);
+					memset(buf, '\0', 1024);
 					strcpy(fname, proc_fd_dir);
 					strncat(fname, dirent->d_name, 1023 - proc_fd_dir_len);
 					if (readlink(fname, buf, 1023) > 0) {
@@ -782,9 +790,13 @@ static void _cleanup_jitdumps(void)
 					}
 				}
 			}
+			closedir(dir);
 		}
-		if (!do_not_delete)
-			remove(dmpfile_pathname);
+		if (!do_not_delete) {
+			if (remove(dmpfile_pathname))
+				verbprintf(debug, "Unable to delete %s: %s\n", dmpfile_pathname,
+				           strerror(errno));
+		}
 	}
 	list_for_each_safe(pos1, pos2, &jitdump_deletion_candidates) {
 		struct jitdump_deletion_candidate * pname = list_entry(pos1,
@@ -800,8 +812,10 @@ static void _cleanup_jitdumps(void)
 int main(int argc, char ** argv)
 {
 	unsigned long long start_time, end_time;
-	char const * session_dir;
+	char session_dir[PATH_MAX];
 	int rc = 0;
+	size_t sessdir_len = 0;
+	char * path_end;
 
 	debug = 0;
 	if (argc > 1 && strcmp(argv[1], "-d") == 0) {
@@ -831,18 +845,22 @@ int main(int argc, char ** argv)
 		goto out;
 	}
 
-	session_dir = argv[1];
 	/*
 	 * Check for a maximum of 4096 bytes (Linux path name length limit) decremented
 	 * by 16 bytes (will be used later for appending samples sub directory).
 	 * Integer overflows according to the session dir parameter (user controlled)
 	 * are not possible anymore.
 	 */
-	if (strlen(session_dir) > PATH_MAX - 16) {
-		printf("opjitconv: Path name length limit exceeded for session directory: %s\n", session_dir);
+	path_end = memchr(argv[1], '\0', PATH_MAX);
+	if (!path_end || ((sessdir_len = (path_end - argv[1])) >= PATH_MAX - 16)) {
+		printf("opjitconv: Path name length limit exceeded for session directory\n");
 		rc = EXIT_FAILURE;
 		goto out;
 	}
+	memset(session_dir, '\0', PATH_MAX);
+	assert(sessdir_len < (PATH_MAX - 16 - 1));
+	strncpy(session_dir, argv[1], sessdir_len);
+	session_dir[PATH_MAX -1] = '\0';
 
 	start_time = atol(argv[2]);
 	end_time = atol(argv[3]);

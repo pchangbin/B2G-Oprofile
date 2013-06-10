@@ -34,6 +34,8 @@ event_setting::event_setting()
 
 config_setting::config_setting()
 	:
+	buffer_size(OP_DEFAULT_BUF_SIZE),
+	note_table_size(0),
 	no_kernel(false),
 	verbose(false),
 	separate_lib(false),

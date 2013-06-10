@@ -13,7 +13,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 #include <iostream>
+#include <sstream>
 
 #include "operf_sfile.h"
 #include "operf_kernel.h"
@@ -179,12 +181,18 @@ struct operf_sfile * operf_sfile_find(struct operf_transient const * trans)
 	struct operf_kernel_image * ki = NULL;
 	unsigned long hash;
 
+	// The code that calls this function would always have set trans->image_name, but coverity
+	// isn't smart enough to know that.  So we add the assert here just to shut up coverity.
+	assert(trans->image_name);
 
 	if (trans->in_kernel) {
 		ki = operf_find_kernel_image(trans->pc);
 		if (!ki) {
-			if (cverb << vsfile)
-				cout << "Lost kernel sample " << std::hex << trans->pc << std::endl;;
+			if (cverb << vsfile) {
+				ostringstream message;
+				message << "Lost kernel sample " << std::hex << trans->pc << std::endl;;
+				cout << message.str();
+			}
 			operf_stats[OPERF_LOST_KERNEL]++;
 			return NULL;
 		}

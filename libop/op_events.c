@@ -256,6 +256,7 @@ static void free_unit_mask(struct op_unit_mask * um)
 {
 	list_del(&um->um_next);
 	free(um);
+	um = NULL;
 }
 
 /*
@@ -289,8 +290,6 @@ static void read_unit_masks(char const * file)
 		} else {
 			if (!um)
 				parse_error("no unit mask name line");
-			if (um->num >= MAX_UNIT_MASK)
-				parse_error("oprofile: maximum unit mask entries exceeded");
 
 			parse_um_entry(&um->um[um->num], line);
 			++(um->num);
@@ -561,6 +560,7 @@ static void read_events(char const * file)
 				c = skip_ws(c);
 				if (*c != '\0' && *c != '#')
 					parse_error("non whitespace after include:");
+				break;
 			} else {
 				parse_error("unknown tag");
 			}
@@ -925,6 +925,7 @@ char const * find_mapping_for_event(u32 nr, op_cpu cpu_type)
 		case CPU_PPC64_POWER6:
 		case CPU_PPC64_POWER7:
 		case CPU_PPC64_IBM_COMPAT_V1:
+		// For ppc64 types of CPU_PPC64_ARCH_V1 and higher, we don't need an event_mappings file
 			if (!fp) {
 				fprintf(stderr, "oprofile: could not open event mapping file %s\n", filename);
 				exit(EXIT_FAILURE);
@@ -1036,7 +1037,7 @@ static int _is_um_valid_bitmask(struct op_event * event, u32 passed_um)
 	for (i = 1; i < evt.unit->num; i++) {
 		int j = i - 1;
 		u32 tmp = evt.unit->um[i].value;
-		while (tmp < evt.unit->um[j].value && j >= 0) {
+		while (j >= 0 && tmp < evt.unit->um[j].value) {
 			evt.unit->um[j + 1].value = evt.unit->um[j].value;
 			j -= 1;
 		}
@@ -1063,6 +1064,14 @@ static int _is_um_valid_bitmask(struct op_event * event, u32 passed_um)
 	}
 	evt.unit = tmp_um_no_dups;
 
+	// Now check if passed um==0 and if the defined event has a UM with value '0'.
+	if (!passed_um) {
+		for (i = 0; i < evt.unit->num; i++) {
+			if (!evt.unit->um[i].value)
+				return 1;
+		}
+	}
+
 	/* Finally, we'll see if the passed unit mask value can be matched with a
 	 * mask of available unit mask values. We check for this by determining
 	 * whether the exact bits set in the current um are also set in the
@@ -1080,8 +1089,6 @@ static int _is_um_valid_bitmask(struct op_event * event, u32 passed_um)
 		}
 	}
 
-	free(tmp_um);
-	free(tmp_um_no_dups);
 	if (dup_value_used) {
 		fprintf(stderr, "Ambiguous bitmask: Unit mask values"
 		        " cannot include non-unique numerical values (i.e., 0x%x).\n",
@@ -1091,6 +1098,8 @@ static int _is_um_valid_bitmask(struct op_event * event, u32 passed_um)
 	} else if (masked_val == passed_um && passed_um != 0) {
 		retval = 1;
 	}
+	free(tmp_um);
+	free(tmp_um_no_dups);
 	return retval;
 }
 
@@ -1224,6 +1233,8 @@ void op_default_event(op_cpu cpu_type, struct op_default_event_descr * descr)
 		case CPU_PPC64_CELL:
 		case CPU_PPC64_POWER7:
 		case CPU_PPC64_IBM_COMPAT_V1:
+		case CPU_PPC64_ARCH_V1:
+		case CPU_PPC64_POWER8:
 			descr->name = "CYCLES";
 			break;
 

@@ -269,7 +269,7 @@ load_module_26()
 		fi
 	fi
 	mkdir /dev/oprofile >/dev/null 2>&1
-	grep oprofilefs /etc/mtab >/dev/null
+	grep oprofilefs /proc/mounts >/dev/null
 	if test "$?" -ne 0; then
 		mount -t oprofilefs nodev /dev/oprofile >/dev/null
 	fi
@@ -397,6 +397,11 @@ do_init()
 				;;
 			ia64/*)
 				IS_PERFMON=$KERNEL_SUPPORT
+				;;
+			ppc64/power8)
+				echo "*** IBM POWER 8 processor is not supported with opcontrol.  Please use operf instead. ***"
+				do_deinit
+				exit 1
 				;;
 		esac
 	fi
@@ -1856,7 +1861,7 @@ do_reset()
 do_deinit()
 {
 	# unmount /dev/oprofile if it is mounted
-	OPROF_FS=`grep /dev/oprofile /etc/mtab`
+	OPROF_FS=`grep /dev/oprofile /proc/mounts`
 	if test -n "$OPROF_FS"; then
 		umount /dev/oprofile
 	fi
@@ -1955,7 +1960,7 @@ check_options_early()
 check_version()
 {
 	OPROFILE_AVAILABLE=no
-	grep oprofilefs /etc/mtab >/dev/null
+	grep oprofilefs /proc/mounts >/dev/null
 	if test "$?" -eq 0; then
 		# need to have oprofilefs mounted for this to work on 2.6
 		KERNEL_SUPPORT=yes

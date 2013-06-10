@@ -74,6 +74,9 @@ mangle_filename(struct sfile * last, struct sfile const * sf, int counter, int c
 
 	values.flags = 0;
 
+	// To silence Coverity
+	values.anon_name = NULL;
+	values.cg_image_name = NULL;
 	if (sf->kernel) {
 		values.image_name = sf->kernel->name;
 		values.flags |= MANGLE_KERNEL;
@@ -154,7 +157,12 @@ int opd_open_sample_file(odb_t *file, struct sfile *last,
 
 	verbprintf(vsfile, "Opening \"%s\"\n", mangled);
 
-	create_path(mangled);
+	err = create_path(mangled);
+	if (err) {
+		fprintf(stderr, "oprofiled: create path for %s failed: %s\n",
+		        mangled, strerror(err));
+		goto out;
+	}
 
 	/* locking sf will lock associated cg files too */
 	sfile_get(sf);

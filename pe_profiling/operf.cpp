@@ -49,6 +49,7 @@
 #include "child_reader.h"
 #include "op_get_time.h"
 #include "operf_stats.h"
+#include "op_netburst.h"
 
 using namespace std;
 
@@ -237,13 +238,8 @@ static string args_to_string(void)
 
 void run_app(void)
 {
+	// ASSUMPTION: app_name is a fully-qualified pathname
 	char * app_fname = rindex(app_name, '/') + 1;
-	if (!app_fname) {
-		string msg = "Error trying to parse app name ";
-		msg += app_name;
-		__print_usage_and_exit(msg.c_str());
-	}
-
 	app_args[0] = app_fname;
 
 	string arg_str = args_to_string();
@@ -1080,6 +1076,13 @@ int validate_app_name(void)
 			goto out;
 		}
 		strcat(full_pathname, "/");
+		if ((strlen(full_pathname) + strlen(app_name + 2) + 1) > PATH_MAX) {
+			rc = -1;
+			cerr << "Length of current dir (" << full_pathname << ") and app name ("
+			     << (app_name + 2) << ") exceeds max allowed (" << PATH_MAX << "). Aborting."
+			     << endl;
+			goto out;
+		}
 		strcat(full_pathname, (app_name + 2));
 	} else if (index(app_name, '/')) {
 		// Passed app is in a subdirectory of cur dir; e.g., "test-stuff/myApp"
@@ -1221,6 +1224,12 @@ static void _get_event_code(operf_event_t * event)
 #endif
 
 	event->op_evt_code = base_code;
+	if (cpu_type == CPU_P4 || cpu_type == CPU_P4_HT2) {
+		if (op_netburst_get_perf_encoding(event->name, event->evt_um, 1, 1, &config)) {
+			cerr << "Unable to get event encoding for " << event->name << endl;
+			exit(EXIT_FAILURE);
+		}
+	}
 	event->evt_code = config;
 }
 
@@ -1340,7 +1349,10 @@ static void _process_events_list(void)
 		string event_spec = operf_options::evts[i];
 
 #if PPC64_ARCH
-		event_spec = _handle_powerpc_event_spec(event_spec);
+		// Starting with CPU_PPC64_ARCH_V1, ppc64 events files are formatted like
+		// other architectures, so no special handling is needed.
+		if (cpu_type < CPU_PPC64_ARCH_V1)
+			event_spec = _handle_powerpc_event_spec(event_spec);
 #endif
 
 		if (operf_options::callgraph) {
@@ -1362,10 +1374,10 @@ static void _process_events_list(void)
 				     << endl << "15 times the minimum count value for the event."  << endl;
 			exit(EXIT_FAILURE);
 		}
-		fclose(fp);
+		pclose(fp);
 		char * event_str = op_xstrndup(event_spec.c_str(), event_spec.length());
 		operf_event_t event;
-		strncpy(event.name, strtok(event_str, ":"), OP_MAX_EVT_NAME_LEN);
+		strncpy(event.name, strtok(event_str, ":"), OP_MAX_EVT_NAME_LEN - 1);
 		event.count = atoi(strtok(NULL, ":"));
 		/* Name and count are required in the event spec in order for
 		 * 'ophelp --check-events' to pass.  But since unit mask and domain
@@ -1391,7 +1403,7 @@ static void _process_events_list(void)
 				// consider the entire part a string.
 				if (*endptr) {
 					event.evt_um = 0;
-					strncpy(event.um_name, info, OP_MAX_UM_NAME_LEN);
+					strncpy(event.um_name, info, OP_MAX_UM_NAME_LEN - 1);
 				}
 				break;
 			case _OP_KERNEL:
@@ -1411,13 +1423,16 @@ static void _process_events_list(void)
 	}
 #if PPC64_ARCH
 	{
-		/* This section of code is soley for the ppc64 architecture for which
-		 * the oprofile event code needs to be converted to the appropriate event
-		 * code to pass to the perf_event_open syscall.
+		/* For ppc64 architecture processors prior to the introduction of
+		 * architected_events_v1, the oprofile event code needs to be converted
+		 * to the appropriate event code to pass to the perf_event_open syscall.
+		 * But as of the introduction of architected_events_v1, the events
+		 * file contains the necessary event code information, so this conversion
+		 * step is no longer needed.
 		 */
 
 		using namespace OP_perf_utils;
-		if (!op_convert_event_vals(&events)) {
+		if ((cpu_type < CPU_PPC64_ARCH_V1) && !op_convert_event_vals(&events)) {
 			cerr << "Unable to convert all oprofile event values to perf_event values" << endl;
 			exit(EXIT_FAILURE);
 		}
@@ -1464,7 +1479,7 @@ static void get_default_event(void)
 		 */
 
 		using namespace OP_perf_utils;
-		if (!op_convert_event_vals(&events)) {
+		if ((cpu_type < CPU_PPC64_ARCH_V1) && !op_convert_event_vals(&events)) {
 			cerr << "Unable to convert all oprofile event values to perf_event values" << endl;
 			exit(EXIT_FAILURE);
 		}
@@ -1480,6 +1495,10 @@ static void _process_session_dir(void)
 		cwd = (char *) xmalloc(PATH_MAX);
 		// set default session dir
 		cwd = getcwd(cwd, PATH_MAX);
+		if (cwd == NULL) {
+			perror("Error calling getcwd");
+			exit(EXIT_FAILURE);
+		}
 		operf_options::session_dir = cwd;
 		operf_options::session_dir +="/oprofile_data";
 		samples_dir = operf_options::session_dir + "/samples";
@@ -1833,6 +1852,7 @@ static int _get_cpu_for_perf_events_cap(void)
 	memset(cpus_online, 0, sizeof(cpus_online));
 
 	if ( fgets(cpus_online, sizeof(cpus_online), online_cpus) == NULL) {
+		fclose(online_cpus);
 		err_msg = "Internal Error (3): Number of online cpus cannot be determined.";
 		retval = -1;
 		goto error;

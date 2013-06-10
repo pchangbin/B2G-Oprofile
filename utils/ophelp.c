@@ -670,6 +670,13 @@ int main(int argc, char const * argv[])
 			"No public performance monitoring doc available for older processors.\n";
 		break;
 
+	case CPU_PPC64_ARCH_V1:
+	case CPU_PPC64_POWER8:
+		event_doc =
+			"This processor type is fully supported with operf; opcontrol timer mode may be available.\n"
+			"See Power ISA 2.07 at https://www.power.org/\n\n";
+		break;
+
 	case CPU_PPC64_CELL:
 		event_doc =
 			"Obtain Cell Broadband Engine documentation at:\n"

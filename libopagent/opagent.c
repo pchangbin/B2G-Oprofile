@@ -57,6 +57,7 @@
 #include <stdint.h>
 #include <limits.h>
 #include <sys/types.h>
+#include <dirent.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -141,21 +142,46 @@ op_agent_t op_open_agent(void)
 	struct timeval tv;
 	FILE * dumpfile = NULL;
 
-	if (0 == stat(TMP_OPROFILE_DIR, &dirstat) && !S_ISDIR(dirstat.st_mode)) {
-		fprintf(stderr, "Error: Creation of directory %s failed.\n", TMP_OPROFILE_DIR);
-		errno = EEXIST;
-		return NULL;
+	/* Coverity complains about 'time-of-check-time-of-use' race if we do stat() on
+	 * a file (or directory) and then open or create it afterwards.  So instead,
+	 * we'll try to open it and see what happens.
+	 */
+	int create_dir = 0;
+	DIR * dir1 = opendir(TMP_OPROFILE_DIR);
+	if (!dir1) {
+		if (errno == ENOENT) {
+			create_dir = 1;
+		} else if (errno == ENOTDIR) {
+			fprintf(stderr, "Error: Creation of directory %s failed. File exists where directory is expected.\n",
+			        TMP_OPROFILE_DIR);
+			return NULL;
+		}
 	} else {
+		closedir(dir1);
+	}
+	if (create_dir) {
+		create_dir = 0;
 		rc = mkdir(TMP_OPROFILE_DIR, S_IRWXU | S_IRWXG | S_IRWXO);
 		if (rc && (errno != EEXIST)) {
 			fprintf(stderr, "Error trying to create %s dir.\n", TMP_OPROFILE_DIR);
 			return NULL;
 		}
 	}
-	if (0 == stat(JITDUMP_DIR, &dirstat) && !S_ISDIR(dirstat.st_mode)) {
-		fprintf(stderr, "Error: Creation of directory %s failed.\n", JITDUMP_DIR);
-		return NULL;
+
+	dir1 = opendir(JITDUMP_DIR);
+	if (!dir1) {
+		if (errno == ENOENT) {
+			create_dir = 1;
+		} else if (errno == ENOTDIR) {
+			fprintf(stderr, "Error: Creation of directory %s failed. File exists where directory is expected.\n",
+			        JITDUMP_DIR);
+			return NULL;
+		}
 	} else {
+		closedir(dir1);
+	}
+
+	if (create_dir) {
 		rc = mkdir(JITDUMP_DIR, S_IRWXU | S_IRWXG | S_IRWXO);
 		if (rc && (errno != EEXIST)) {
 			fprintf(stderr, "Error trying to create %s dir.\n", JITDUMP_DIR);
@@ -173,10 +199,13 @@ op_agent_t op_open_agent(void)
 	dumpfile = fdopen(fd, "w");
 	if (!dumpfile) {
 		fprintf(stderr, "%s\n", err_msg);
+		close(fd);
 		return NULL;
 	}
-	if (define_bfd_vars())
+	if (define_bfd_vars()) {
+		fclose(dumpfile);
 		return NULL;
+	}
 	header.magic = JITHEADER_MAGIC;
 	header.version = JITHEADER_VERSION;
 	header.totalsize = sizeof(header) + strlen(_bfd_target_name) + 1;
@@ -186,6 +215,7 @@ op_agent_t op_open_agent(void)
 	header.bfd_arch = _bfd_arch;
 	header.bfd_mach = _bfd_mach;
 	if (gettimeofday(&tv, NULL)) {
+		fclose(dumpfile);
 		fprintf(stderr, "gettimeofday failed\n");
 		return NULL;
 	}
@@ -193,16 +223,19 @@ op_agent_t op_open_agent(void)
 	header.timestamp = tv.tv_sec;
 	snprintf(err_msg, PATH_MAX + 16, "Error writing to %s", dump_path);
 	if (!fwrite(&header, sizeof(header), 1, dumpfile)) {
+		fclose(dumpfile);
 		fprintf(stderr, "%s\n", err_msg);
 		return NULL;
 	}
 	if (!fwrite(_bfd_target_name, strlen(_bfd_target_name) + 1, 1,
 		    dumpfile)) {
+		fclose(dumpfile);
 		fprintf(stderr, "%s\n", err_msg);
 		return NULL;
 	}
 	/* write padding '\0' if necessary */
 	if (pad_cnt && !fwrite(pad_bytes, pad_cnt, 1, dumpfile)) {
+		fclose(dumpfile);
 		fprintf(stderr, "%s\n", err_msg);
 		return NULL;
 	}

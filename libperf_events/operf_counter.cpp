@@ -22,6 +22,7 @@
 #include <errno.h>
 #include <string.h>
 #include <iostream>
+#include <sstream>
 #include <stdlib.h>
 #include "op_events.h"
 #include "operf_counter.h"
@@ -147,7 +148,7 @@ out:
 
 static event_t * _get_perf_event_from_file(struct mmap_info & info)
 {
-	uint32_t size;
+	uint32_t size = 0;
 	static int num_remaps = 0;
 	event_t * event;
 	size_t pe_header_size = sizeof(struct perf_event_header);
@@ -349,15 +350,21 @@ int operf_record::_write_header_to_file(void)
 	struct op_file_attr f_attr;
 	int total = 0;
 
-	lseek(output_fd, sizeof(f_header), SEEK_SET);
+	if (lseek(output_fd, sizeof(f_header), SEEK_SET) == (off_t)-1)
+		goto err_out;
+
 
 	for (unsigned i = 0; i < evts.size(); i++) {
 		opHeader.h_attrs[i].id_offset = lseek(output_fd, 0, SEEK_CUR);
+		if (opHeader.h_attrs[i].id_offset == (off_t)-1)
+			goto err_out;
 		total += op_write_output(output_fd, &opHeader.h_attrs[i].ids[0],
 		                         opHeader.h_attrs[i].ids.size() * sizeof(u64));
 	}
 
 	opHeader.attr_offset = lseek(output_fd, 0, SEEK_CUR);
+	if (opHeader.attr_offset == (off_t)-1)
+		goto err_out;
 
 	for (unsigned i = 0; i < evts.size(); i++) {
 		struct op_header_evt_info attr = opHeader.h_attrs[i];
@@ -368,6 +375,9 @@ int operf_record::_write_header_to_file(void)
 	}
 
 	opHeader.data_offset = lseek(output_fd, 0, SEEK_CUR);
+	if (opHeader.data_offset == (off_t)-1)
+		goto err_out;
+
 
 	f_header.magic = OP_MAGIC;
 	f_header.size = sizeof(f_header);
@@ -377,10 +387,17 @@ int operf_record::_write_header_to_file(void)
 	f_header.data.offset = opHeader.data_offset;
 	f_header.data.size = opHeader.data_size;
 
-	lseek(output_fd, 0, SEEK_SET);
+	if (lseek(output_fd, 0, SEEK_SET) == (off_t)-1)
+		goto err_out;
 	total += op_write_output(output_fd, &f_header, sizeof(f_header));
-	lseek(output_fd, opHeader.data_offset + opHeader.data_size, SEEK_SET);
+	if (lseek(output_fd, opHeader.data_offset + opHeader.data_size, SEEK_SET) == (off_t)-1)
+		goto err_out;
 	return total;
+
+err_out:
+	string errmsg = "Internal error doing lseek: ";
+	errmsg += strerror(errno);
+	throw runtime_error(errmsg);
 }
 
 int operf_record::_write_header_to_pipe(void)
@@ -417,8 +434,10 @@ void operf_record::register_perf_event_id(unsigned event, u64 id, perf_event_att
 	// is invoked once for each event for each cpu; but it's not worth the bother of trying
 	// to avoid it.
 	opHeader.h_attrs[event].attr = attr;
-	cverb << vrecord << "Perf header: id = " << hex << (unsigned long long)id << " for event num "
-			<< event << ", code " << attr.config <<  endl;
+	ostringstream message;
+	message  << "Perf header: id = " << hex << (unsigned long long)id << " for event num "
+	         << event << ", code " << attr.config <<  endl;
+	cverb << vrecord << message.str();
 	opHeader.h_attrs[event].ids.push_back(id);
 }
 
@@ -436,7 +455,10 @@ int operf_record::_prepare_to_record_one_fd(int idx, int fd)
 	md.prev = 0;
 	md.mask = num_mmap_pages * pagesize - 1;
 
-	fcntl(fd, F_SETFL, O_NONBLOCK);
+	if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0) {
+		perror("fcntl failed");
+		return -1;
+	}
 
 	poll_data[idx].fd = fd;
 	poll_data[idx].events = POLLIN;
@@ -581,8 +603,11 @@ void operf_record::setup()
 	 */
 	use_cpu_minus_one = use_cpu_minus_one ? true : profile_process_group;
 	num_cpus = use_cpu_minus_one ? 1 : sysconf(_SC_NPROCESSORS_ONLN);
-	if (!num_cpus)
-		throw runtime_error("Number of online CPUs is zero; cannot continue");;
+	if (num_cpus < 1) {
+		char int_str[256];
+		sprintf(int_str, "Number of online CPUs is %d; cannot continue", num_cpus);
+		throw runtime_error(int_str);
+	}
 
 	cverb << vrecord << "calling perf_event_open for pid " << pid_to_profile << " on "
 	      << num_cpus << " cpus" << endl;
@@ -656,8 +681,6 @@ void operf_record::setup()
 			}
 		}
 	}
-	if (dir)
-		closedir(dir);
 	int num_mmaps;
 	if (pid_started && (procs.size() > 1))
 		num_mmaps = procs.size();
@@ -672,6 +695,8 @@ void operf_record::setup()
 
 	// Set bit to indicate we're set to go.
 	valid = true;
+	if (dir)
+		closedir(dir);
 	return;
 
 error:
@@ -730,7 +755,7 @@ void operf_record::recordPerfData(void)
 			break;
 
 		if (prev == sample_reads) {
-			poll(poll_data, poll_count, -1);
+			(void)poll(poll_data, poll_count, -1);
 		}
 
 		if (quit) {
@@ -814,7 +839,9 @@ int operf_read::_read_header_info_with_ifstream(void)
 				ret = OP_PERF_HANDLED_ERROR;
 				goto out;
 			}
-			cverb << vconvert << "Perf header: id = " << hex << (unsigned long long)perf_id << endl;
+			ostringstream message;
+			message << "Perf header: id = " << hex << (unsigned long long)perf_id << endl;
+			cverb << vconvert << message.str();
 			opHeader.h_attrs[i].ids.push_back(perf_id);
 		}
 		istrm.seekg(next_f_attr, ios_base::beg);
@@ -904,7 +931,9 @@ int operf_read::_read_perf_header_from_pipe(void)
 				errmsg = "Error reading perf ID on sample data pipe: " + string(strerror(errno));
 				goto fail;
 			}
-			cverb << vconvert << "Perf header: id = " << hex << (unsigned long long)perf_id << endl;
+			ostringstream message;
+			message << "Perf header: id = " << hex << (unsigned long long)perf_id << endl;
+			cverb << vconvert << message.str();
 			opHeader.h_attrs[i].ids.push_back(perf_id);
 		}
 
@@ -972,8 +1001,10 @@ unsigned int operf_read::convertPerfData(void)
 	for (int i = 0; i < OPERF_MAX_STATS; i++)
 		operf_stats[i] = 0;
 
-	cverb << vdebug << "Converting operf data to oprofile sample data format" << endl;
-	cverb << vdebug << "sample type is " << hex <<  opHeader.h_attrs[0].attr.sample_type << endl;
+	ostringstream message;
+	message << "Converting operf data to oprofile sample data format" << endl;
+	message << "sample type is " << hex <<  opHeader.h_attrs[0].attr.sample_type << endl;
+	cverb << vdebug << message.str();
 	first_time_processing = true;
 	int num_recs = 0;
 	struct perf_event_header last_header;
