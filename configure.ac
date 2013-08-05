@@ -11,7 +11,7 @@
 
 AC_PREREQ(2.13)
 
-AC_INIT([OProfile], [0.9.9git])
+AC_INIT([OProfile], [0.9.9])
 AC_CONFIG_SRCDIR([libop/op_config.h])
 AM_INIT_AUTOMAKE
 AC_CONFIG_HEADERS(config.h)
@@ -156,6 +156,25 @@ if test "$kernel_has_perf_events_support" = "yes"; then
 	fi
 	AC_DEFINE_UNQUOTED(HAVE_PERF_GUEST_MACROS, $HAVE_PERF_GUEST_MACROS, [PERF_RECORD_MISC_GUEST_KERNEL is defined in perf_event.h])
 	rm -f test-for-PERF_GUEST*
+
+	AC_MSG_CHECKING([whether precise_ip is defined in perf_event.h])
+	rm -f test-for-precise-ip
+	AC_LANG_CONFTEST(
+		[AC_LANG_PROGRAM([[#include <linux/perf_event.h>]],
+			[[struct perf_event_attr attr;
+			attr.precise_ip = 2;]])
+		])
+	$CC conftest.$ac_ext $CFLAGS $LDFLAGS $LIBS $PERF_EVENT_FLAGS -o test-for-precise-ip  > /dev/null 2>&1
+	if test -f test-for-precise-ip; then
+		echo "yes"
+		HAVE_PERF_PRECISE_IP='1'
+	else
+		echo "no"
+		HAVE_PERF_PRECISE_IP='0'
+	fi
+	AC_DEFINE_UNQUOTED(HAVE_PERF_PRECISE_IP, $HAVE_PERF_PRECISE_IP, [precise_ip is defined in perf_event.h])
+	rm -f test-for-precise-ip*
+
 else
 	HAVE_PERF_EVENTS='0'
 	AC_MSG_RESULT([No perf_events support available; falling back to legacy oprofile])
@@ -399,6 +418,8 @@ OP_DOCDIR=`eval echo "${my_op_prefix}/share/doc/$PACKAGE/"`
 AC_SUBST(OP_DOCDIR)
 
 AC_OUTPUT(Makefile \
+	pe_counting/Makefile \
+	libpe_utils/Makefile \
 	pe_profiling/Makefile \
 	libperf_events/Makefile \
 	m4/Makefile \
@@ -426,12 +447,15 @@ AC_OUTPUT(Makefile \
 	doc/oprofile.1 \
 	doc/opcontrol.1 \
 	doc/ophelp.1 \
+	doc/op-check-perfevents.1 \
+	doc/oprof_start.1 \
 	doc/opreport.1 \
 	doc/opannotate.1 \
 	doc/opgprof.1 \
 	doc/oparchive.1 \
 	doc/opimport.1 \
 	doc/operf.1 \
+	doc/ocount.1 \
 	doc/srcdoc/Doxyfile \
 	libpp/Makefile \
 	opjitconv/Makefile \

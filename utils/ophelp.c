@@ -33,6 +33,7 @@ static op_cpu cpu_type = CPU_NO_GOOD;
 static char * cpu_string;
 static int callgraph_depth;
 static int want_xml;
+static int ignore_count;
 
 static poptContext optcon;
 
@@ -74,8 +75,9 @@ static void word_wrap(int indent, int *column, char *msg)
 		printf("%.*s", wlen, msg);
 		*column += wlen + 1;
 		msg += wlen;
-		msg += strspn(msg, " ");
-		if (*msg)
+		wlen = strspn(msg, " ");
+		msg += wlen;
+		if (wlen != 0)
 			putchar(' ');
 	}
 }
@@ -136,34 +138,29 @@ static void help_for_event(struct op_event * event)
 
 	if (strcmp(event->unit->name, "zero")) {
 
-		printf("\tUnit masks (default 0x%x)\n",
-		       event->unit->default_mask);
+		if (event->unit->default_mask_name) {
+			printf("\tUnit masks (default %s)\n",
+			       event->unit->default_mask_name);
+		} else {
+			printf("\tUnit masks (default 0x%x)\n",
+			       event->unit->default_mask);
+		}
 		printf("\t----------\n");
 
 		for (j = 0; j < event->unit->num; j++) {
 			printf("\t0x%.2x: ",
 			       event->unit->um[j].value);
 			column = 14;
-			word_wrap(14, &column, event->unit->um[j].desc);
-			if (event->unit->um[j].extra) {
-				u32 extra = event->unit->um[j].extra;
 
-				word_wrap(14, &column, " (extra:");
-				if (extra & EXTRA_EDGE)
-					word_wrap(14, &column, " edge");
-				if (extra & EXTRA_INV)
-					word_wrap(14, &column, " inv");
-				if ((extra >> EXTRA_CMASK_SHIFT) & EXTRA_CMASK_MASK) {
-					snprintf(buf, sizeof buf, " cmask=%x",
-						 (extra >> EXTRA_CMASK_SHIFT) & EXTRA_CMASK_MASK);
-					word_wrap(14, &column, buf);
-				}
-				if (extra & EXTRA_ANY)
-					word_wrap(14, &column, " any");
-				if (extra & EXTRA_PEBS)
-					word_wrap(14, &column, " pebs");
-				word_wrap(14, &column, ")");
+			/* Named mask */
+			if (event->unit->um[j].name) {
+				word_wrap(14, &column, "(name=");
+				word_wrap(14, &column,
+					event->unit->um[j].name);
+				word_wrap(14, &column, ") ");
 			}
+
+			word_wrap(14, &column, event->unit->um[j].desc);
 			putchar('\n');
 		}
 	}
@@ -206,7 +203,7 @@ static void check_event(struct parsed_event * pev,
 	min_count = event->min_count;
 	if (callgraph_depth)
 		min_count *= callgraph_min_count_scale;
-	if (pev->count < min_count) {
+	if (!ignore_count && pev->count < min_count) {
 		fprintf(stderr, "Count %d for event %s is below the "
 		        "minimum %d\n", pev->count, pev->name, min_count);
 		exit(EXIT_FAILURE);
@@ -222,7 +219,8 @@ static void resolve_events(void)
 	size_t nr_counters = op_get_nr_counters(cpu_type);
 	struct op_event const * selected_events[num_chosen_events];
 
-	count = parse_events(parsed_events, num_chosen_events, chosen_events);
+	count = parse_events(parsed_events, num_chosen_events, chosen_events,
+	                     ignore_count ? 0 : 1);
 
 	for (i = 0; i < count; ++i) {
 	        op_resolve_unit_mask(&parsed_events[i], NULL);
@@ -289,7 +287,7 @@ static void show_unit_mask(void)
 {
 	size_t count;
 
-	count = parse_events(parsed_events, num_chosen_events, chosen_events);
+	count = parse_events(parsed_events, num_chosen_events, chosen_events, ignore_count ? 0 : 1);
 	if (count > 1) {
 		fprintf(stderr, "More than one event specified.\n");
 		exit(EXIT_FAILURE);
@@ -307,7 +305,7 @@ static void show_extra_mask(void)
 	size_t count;
 	unsigned extra = 0;
 
-	count = parse_events(parsed_events, num_chosen_events, chosen_events);
+	count = parse_events(parsed_events, num_chosen_events, chosen_events, ignore_count ? 0 : 1);
 	if (count > 1) {
 		fprintf(stderr, "More than one event specified.\n");
 		exit(EXIT_FAILURE);
@@ -342,6 +340,8 @@ static struct poptOption options[] = {
 	  "use the given CPU type", "cpu type", },
 	{ "check-events", 'e', POPT_ARG_NONE, &check_events, 0,
 	  "check the given event descriptions for validity", NULL, },
+	{ "ignore-count", 'i', POPT_ARG_NONE, &ignore_count, 0,
+	  "do not validate count value (used by ocount)", NULL},
 	{ "unit-mask", 'u', POPT_ARG_NONE, &unit_mask, 0,
 	  "default unit mask for the given event", NULL, },
 	{ "get-cpu-type", 'r', POPT_ARG_NONE, &get_cpu_type, 0,

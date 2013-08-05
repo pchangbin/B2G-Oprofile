@@ -233,9 +233,6 @@ opcontrol: usage:
                                  buffer-size.
    --cpu-buffer-size=num         per-cpu buffer size in units (2.6 kernel)
                                  Same rules as defined for buffer-size.
-   --note-table-size             kernel notes buffer size in notes units (2.4
-                                 kernel)
-
    --xen                         Xen image (for Xen only)
    --active-domains=<list>       List of domains in profiling session (for Xen)
                                  (list contains domain ids separated by commas)
@@ -725,8 +722,8 @@ normalise_events()
 			KERNEL=`echo $GOTEVENT | awk -F: '{print $4}'`
 			USER=`echo $GOTEVENT | awk -F: '{print $5}'`
 			TMPEVENT="$EVENT:$COUNT:$UNIT_MASK"
-			UNIT_MASK_NAMED="$UNIT_MASK"
 			UNIT_MASK=`$OPHELP --unit-mask $TMPEVENT`
+			UNIT_MASK_NAMED="$UNIT_MASK"
 			if test "$?" != 0; then
 				exit 1
 			fi
@@ -937,16 +934,6 @@ do_options()
 			--active-domains)
 				error_if_invalid_arg $arg $val
 				ACTIVE_DOMAINS=$val
-				DO_SETUP=yes
-				;;
-			--note-table-size)
-				if test "$KERNEL_SUPPORT" = "yes"; then
-					echo "\"$arg\" meaningless on this kernel" >&2
-					exit 1
-				else
-					error_if_not_number "$arg" "$val"
-					NOTE_SIZE=$val
-				fi
 				DO_SETUP=yes
 				;;
 			-i|--image)
@@ -1539,11 +1526,20 @@ do_param_setup()
 
 				EXTRA=`$OPHELP --extra-mask $EVENT:$COUNT:$UNIT_MASK_NAMED`
 				if test "$EXTRA" -ne 0 ; then
-					if ! test -f $MOUNT/$CTR/extra ; then
-						echo >&2 "Warning: $GOTEVENT has extra mask, but kernel does not support extra field"
-						echo >&2 "Please update your kernel or use a different event. Will miscount."
+				# A value >= 0x40000 returned by 'ophelp --extra-mask' (EXTRA_MIN_VAL) is interpreted
+				# as a valid extra value; otherwise we interpret as a simple unit mask value
+				# for a named unit mask with EXTRA_NONE.
+				EXTRA_MIN_VAL=262144
+					if test "$EXTRA" -ge $EXTRA_MIN_VAL ; then
+						if ! test -f $MOUNT/$CTR/extra ; then
+							echo >&2 "Warning: $GOTEVENT has extra mask, but kernel does not support extra field"
+							echo >&2 "Please update your kernel or use a different event. Will miscount."
+						else
+							set_ctr_param $CTR extra $EXTRA
+						fi
 					else
-						set_ctr_param $CTR extra $EXTRA
+						UNIT_MASK=$EXTRA
+						set_ctr_param $CTR unit_mask $UNIT_MASK
 					fi
 				fi
 			fi

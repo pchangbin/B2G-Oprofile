@@ -15,11 +15,14 @@ man_MANS = \
 	opannotate.1 \
 	opgprof.1 \
 	ophelp.1 \
+	op-check-perfevents.1 \
+	oprof_start.1 \
 	oparchive.1 \
 	opimport.1
 
 if BUILD_FOR_PERF_EVENT
-man_MANS += operf.1
+man_MANS += operf.1 \
+			ocount.1
 endif
 
 htmldir = $(prefix)/share/doc/oprofile

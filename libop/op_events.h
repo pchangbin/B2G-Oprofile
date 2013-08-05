@@ -21,11 +21,14 @@ extern "C" {
 #include "op_list.h"
 
 #define EXTRA_EDGE (1U << 18)
+#define EXTRA_MIN_VAL EXTRA_EDGE
+
 #define EXTRA_ANY  (1U << 21)
 #define EXTRA_INV  (1U << 23)
 #define EXTRA_CMASK_SHIFT 24
 #define EXTRA_CMASK_MASK 0xff
 #define EXTRA_PEBS (1U << 19) /* fake, mapped to pin control, but mapped back for perf */
+#define EXTRA_NONE (1U << 22) /* mapped to enabled */
 
 /*
  * For timer based sampling some targets (e.g. s390) use a virtual
@@ -55,9 +58,11 @@ struct op_unit_mask {
 	u32 num;		/**< number of possible unit masks */
 	enum unit_mask_type unit_type_mask;
 	u32 default_mask;	/**< only the gui use it */
+	char * default_mask_name;
 	struct op_described_um {
 	        u32 extra;
 		u32 value;
+		char * name;
 		char * desc;
 	} um[MAX_UNIT_MASK];
 	struct list_head um_next; /**< next um in list */
