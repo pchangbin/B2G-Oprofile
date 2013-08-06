@@ -28,6 +28,9 @@
 #include <stdexcept>
 #include <sstream>
 #include <string>
+#ifdef NDK_BUILD
+#include <sys/syscall.h>
+#endif
 
 #include "config.h"
 // HAVE_LIBPFM is defined in config.h
